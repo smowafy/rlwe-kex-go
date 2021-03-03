@@ -205,7 +205,7 @@ func (v* Vec) Neg() *Vec {
 }
 
 // x ^ ((x ^ y) | (x - y) ^ x)
-func (v Vec) BitwiseLt(v1 Vec) int {
+func (v Vec) BitwiseLtVec(v1 Vec) int {
 	a := v.Copy().Xor(v1)
 	b := v.Copy().Sub(v1)
 	b.Xor(v)
@@ -239,7 +239,7 @@ func constantTimeSampling(randomVec Vec) int {
 	mask, res := 0, 0
 
 	for i := 0; i < 52; i++ {
-		compRes := randomVec.BitwiseLt(table[i])
+		compRes := randomVec.BitwiseLtVec(table[i])
 
 		// either 0 or -1
 		newMask := -compRes

@@ -104,7 +104,7 @@ func TestVecCopy(t *testing.T) {
 	}
 }
 
-func TestVecBitwiseLt(t *testing.T) {
+func TestBitwiseLtVec(t *testing.T) {
 	v1 := Vec {
 		Chunks: [3]uint64 {
 			0x0000000000000000,
@@ -122,8 +122,8 @@ func TestVecBitwiseLt(t *testing.T) {
 	}
 
 
-	if v1.BitwiseLt(v2) != 1 {
-		t.Errorf("answer  = %v\n", v1.BitwiseLt(v2))
+	if v1.BitwiseLtVec(v2) != 1 {
+		t.Errorf("answer  = %v\n", v1.BitwiseLtVec(v2))
 	}
 }
 

@@ -2,8 +2,35 @@ package main
 
 import (
 	"testing"
+	"math"
 	"math/rand"
 )
+
+func TestEnsureLongMod(t *testing.T) {
+	var i, count int64
+
+	for i = 0; i < 10000000; i++ {
+		expectedRes := i % (int64(1)<<33 - 2)
+		res := EnsureLongMod(i)
+		if res != expectedRes {
+			t.Errorf("long mod failed, expected %v but got %v\n", expectedRes, res)
+		}
+
+		count++
+	}
+
+	for i = 0; i < (1<<60); i+=rand.Int63n(1<<40)+(1<<30) {
+		expectedRes := i % (int64(1)<<33 - 2)
+		res := EnsureLongMod(i)
+		if res != expectedRes {
+			t.Errorf("long mod failed, expected %v but got %v\n", expectedRes, res)
+		}
+
+		count++
+	}
+
+	t.Logf("test cases count: %v\n", count)
+}
 
 func TestModAdd(t *testing.T) {
 	var a, b, res uint32
@@ -85,5 +112,61 @@ func TestPolyMultiply(t *testing.T) {
 
 	if p1.Multiply(&p2).Coefficients != expectedRes.Coefficients {
 		t.Errorf("polynomial multiplication failed, expected %v but got %v\n", expectedRes, p1)
+	}
+}
+
+
+func TestModularRound(t *testing.T) {
+	longPolynomial := LongPolynomial{}
+
+	longPolynomial.Coefficients[0] = int64(NumMod)
+	longPolynomial.Coefficients[1] = int64(NumMod) + 1
+	longPolynomial.Coefficients[2] = 2
+
+	expectedRes := Polynomial{}
+
+	res0 := math.Round(2.0 * float64(NumMod) / float64(LongMod))
+	res1 := math.Round(2.0 * (float64(NumMod)+1) / float64(LongMod))
+	res2 := math.Round(2.0 * 2 / float64(LongMod))
+
+	expectedRes.Coefficients[0] = uint32(res0)
+	expectedRes.Coefficients[1] = uint32(res1)
+	expectedRes.Coefficients[2] = uint32(res2)
+
+	res := longPolynomial.ModularRound()
+
+	if *res != expectedRes {
+		t.Errorf("polynomial modular round failed, expected %v but got %v\n", expectedRes, res)
+	}
+}
+
+func TestCrossRound(t *testing.T) {
+	longPolynomial := LongPolynomial{}
+
+	longPolynomial.Coefficients[0] = CrossRoundQ4 - 5
+	longPolynomial.Coefficients[1] = CrossRoundQ4
+	longPolynomial.Coefficients[2] = CrossRoundQ4 + 5
+	longPolynomial.Coefficients[3] = CrossRoundQ2 - 5
+	longPolynomial.Coefficients[4] = CrossRoundQ2
+	longPolynomial.Coefficients[5] = CrossRoundQ2 + 5
+	longPolynomial.Coefficients[6] = CrossRoundQ2 + CrossRoundQ4 - 5
+	longPolynomial.Coefficients[7] = CrossRoundQ2 + CrossRoundQ4
+	longPolynomial.Coefficients[8] = CrossRoundQ2 + CrossRoundQ4 + 5
+
+	expectedRes := Polynomial{}
+	expectedRes.Coefficients[0] = uint32(math.Floor(4.0 * float64(longPolynomial.Coefficients[0]) / float64(LongMod))) % 2
+	expectedRes.Coefficients[1] = uint32(math.Floor(4.0 * float64(longPolynomial.Coefficients[1]) / float64(LongMod))) % 2
+	expectedRes.Coefficients[2] = uint32(math.Floor(4.0 * float64(longPolynomial.Coefficients[2]) / float64(LongMod))) % 2
+	expectedRes.Coefficients[3] = uint32(math.Floor(4.0 * float64(longPolynomial.Coefficients[3]) / float64(LongMod))) % 2
+	expectedRes.Coefficients[4] = uint32(math.Floor(4.0 * float64(longPolynomial.Coefficients[4]) / float64(LongMod))) % 2
+	expectedRes.Coefficients[5] = uint32(math.Floor(4.0 * float64(longPolynomial.Coefficients[5]) / float64(LongMod))) % 2
+	expectedRes.Coefficients[6] = uint32(math.Floor(4.0 * float64(longPolynomial.Coefficients[6]) / float64(LongMod))) % 2
+	expectedRes.Coefficients[7] = uint32(math.Floor(4.0 * float64(longPolynomial.Coefficients[7]) / float64(LongMod))) % 2
+	expectedRes.Coefficients[8] = uint32(math.Floor(4.0 * float64(longPolynomial.Coefficients[8]) / float64(LongMod))) % 2
+
+	res := longPolynomial.CrossRound()
+
+	if *res != expectedRes {
+		t.Errorf("polynomial modular round failed, expected %v but got %v\n", expectedRes, res)
 	}
 }
