@@ -6,6 +6,36 @@ import (
 	"math/rand"
 )
 
+func TestEnsureMod(t *testing.T) {
+	var i, count uint32
+
+	for i = 0; i < 10000000; i++ {
+		expectedRes := uint32(int64(i) % (int64(1)<<33 - 2))
+		res := EnsureMod(i)
+		if res != expectedRes {
+			t.Errorf("mod failed, expected %v but got %v\n", expectedRes, res)
+		}
+
+		count++
+	}
+
+	if EnsureMod(NumMod) != 0 {
+		t.Errorf("mod failed, expected %v but got %v\n", 1, EnsureMod(NumMod))
+	}
+
+	for i = 0; i < (1<<31); i+=(rand.Uint32() % (1<<30)) {
+		expectedRes := uint32(int64(i) % (int64(1)<<33 - 2))
+		res := EnsureMod(i)
+		if res != expectedRes {
+			t.Errorf("mod failed, expected %v but got %v\n", expectedRes, res)
+		}
+
+		count++
+	}
+
+	t.Logf("test cases count: %v\n", count)
+}
+
 func TestEnsureLongMod(t *testing.T) {
 	var i, count int64
 
@@ -32,6 +62,21 @@ func TestEnsureLongMod(t *testing.T) {
 	t.Logf("test cases count: %v\n", count)
 }
 
+func TestAdjustPositiveNegative(t *testing.T) {
+	cases := 1000
+
+	var c int64
+
+	for i := 0; i < cases; i++ {
+		c = rand.Int63n(LongMod>>2)
+
+		if AdjustPositiveNegative(LongModNeg(c)) != -c {
+			t.Errorf("adjusting failed, expected %v but got %v\n", -c, AdjustPositiveNegative(LongModNeg(c)))
+			return
+		}
+	}
+}
+
 func TestModAdd(t *testing.T) {
 	var a, b, res uint32
 	var expectedRes uint64
@@ -46,6 +91,25 @@ func TestModAdd(t *testing.T) {
 		res = ModAdd(a, b)
 
 		if EnsureMod(uint32(expectedRes)) != res {
+			t.Errorf("mod addition failed, expected %v but got %v\n", expectedRes, res)
+		}
+	}
+}
+
+func TestLongModAdd(t *testing.T) {
+	var a, b, res int64
+	var expectedRes int64
+
+	const cases int = 1000
+
+	for c := 0; c < cases; c++ {
+		a, b = rand.Int63n((1<<62)), rand.Int63n((1<<62))
+
+		expectedRes = (a + b) % LongMod
+
+		res = LongModAdd(a, b)
+
+		if EnsureLongMod(expectedRes) != res {
 			t.Errorf("mod addition failed, expected %v but got %v\n", expectedRes, res)
 		}
 	}
@@ -85,6 +149,19 @@ func TestModNeg(t *testing.T) {
 	}
 }
 
+func TestLongModNeg(t *testing.T) {
+	for a := (int64(1)<<32); a <= (int64(1)<<34); a+=(rand.Int63n(int64(1)<<20)) {
+		expected := (-a + 8 * LongMod) % LongMod
+		actual := LongModNeg(a)
+
+		if expected != actual {
+			t.Errorf("mod negation modulo %v failed for %v, expected %v but got %v\n", LongMod, a, expected, actual)
+
+			return
+		}
+	}
+}
+
 func TestPolyAdd(t *testing.T) {
 }
 
@@ -119,15 +196,16 @@ func TestPolyMultiply(t *testing.T) {
 func TestModularRound(t *testing.T) {
 	longPolynomial := LongPolynomial{}
 
-	longPolynomial.Coefficients[0] = int64(NumMod)
-	longPolynomial.Coefficients[1] = int64(NumMod) + 1
+//	longPolynomial.Coefficients[0] = int64(NumMod)
+	longPolynomial.Coefficients[0] = int64(NumMod>>2) - 1
+	longPolynomial.Coefficients[1] = int64(NumMod) - 3
 	longPolynomial.Coefficients[2] = 2
 
 	expectedRes := Polynomial{}
 
-	res0 := math.Round(2.0 * float64(NumMod) / float64(LongMod))
-	res1 := math.Round(2.0 * (float64(NumMod)+1) / float64(LongMod))
-	res2 := math.Round(2.0 * 2 / float64(LongMod))
+	res0 := math.Round(2.0 * (float64(AdjustPositiveNegative(int64(NumMod>>2) - 1))) / float64(LongMod))
+	res1 := math.Round(2.0 * (float64(AdjustPositiveNegative(int64(NumMod) - 3))) / float64(LongMod))
+	res2 := math.Round(2.0 * -2 / float64(LongMod))
 
 	expectedRes.Coefficients[0] = uint32(res0)
 	expectedRes.Coefficients[1] = uint32(res1)
@@ -168,5 +246,90 @@ func TestCrossRound(t *testing.T) {
 
 	if *res != expectedRes {
 		t.Errorf("polynomial modular round failed, expected %v but got %v\n", expectedRes, res)
+	}
+}
+
+// Note: not 100% uniform over the error, used only for testing
+func SufficientlyCloseLongMod(n int64) int64 {
+	randomBit := int64(RandomBit())
+	randomAbsError := EnsureLongMod(RandomInt64(NewRandomGenerator()))>>5
+
+	randomError := (randomAbsError & -1 + randomBit) | (LongModNeg(randomAbsError) & -randomBit)
+
+	return LongModAdd(n, randomError)
+}
+
+func SufficientlyCloseLongPolynomial(lp *LongPolynomial) *LongPolynomial {
+	var coefficients [1024]int64
+
+	for i := 0; i < len(coefficients); i++ {
+		coefficients[i] = SufficientlyCloseLongMod(lp.Coefficients[i])
+	}
+
+	return &LongPolynomial { Coefficients: coefficients }
+}
+
+func TestReconciliate(t *testing.T) {
+	cases := 2000
+
+	for i := 0; i < cases; i++ {
+		v := EnsureLongMod(RandomInt64(NewRandomGenerator()))
+		w := SufficientlyCloseLongMod(v)
+
+		crv := CrossRound(v)
+		mrv := ModularRound(v)
+
+		res := Reconciliate(w, crv)
+
+		if res != mrv {
+			t.Errorf(`
+				Reconciliation failed
+				v = %v
+				w = %v
+				crv = %v
+				mrv = %v
+				res = Reconciliate(%v, %v) = %v
+				`,
+				v,
+				w,
+				crv,
+				mrv,
+				w,
+				crv,
+				res,
+			)
+			return
+		}
+	}
+
+}
+
+func TestPolynomialReconciliate(t *testing.T) {
+	cases := 2000
+
+	for c := 0; c < cases; c++ {
+		v := NewRandomLongPolynomial()
+		w := SufficientlyCloseLongPolynomial(v)
+
+		crv := v.CrossRound()
+
+		mrv := v.ModularRound()
+
+		res := w.Reconciliate(crv)
+
+		if res.Coefficients != mrv.Coefficients {
+			t.Errorf("polynomial reconciliation failed, crv == recon = %v\n", crv.Coefficients == res.Coefficients)
+
+			var diffCount int
+
+			for i := 0; i < len(res.Coefficients); i++ {
+				if res.Coefficients[i] != mrv.Coefficients[i] {
+					diffCount++
+				}
+			}
+
+			t.Logf("diffCount = %v\n", diffCount)
+			return
+		}
 	}
 }

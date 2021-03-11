@@ -20,6 +20,23 @@ type Polynomial struct {
 	Coefficients [1024]uint32
 }
 
+func RandomInt64(rg RandomGenerator) int64 {
+	var ans int64
+
+	b := make([]byte, 8)
+	_, err := rg.Read(b)
+
+	if err != nil {
+		panic(err)
+	}
+
+	for j := 0; j < 8; j++ {
+		ans |= int64(b[j])<<(j<<3)
+	}
+
+	return ans
+}
+
 func NewPolynomial() *Polynomial {
 	return &Polynomial { }
 }
@@ -32,13 +49,29 @@ func NewLongPolynomial() *LongPolynomial {
 	return &LongPolynomial { }
 }
 
-// TODO: remove if condition, side channel
-func EnsureMod(a uint32) uint32 {
-	if a == NumMod {
-		return 0
-	} else {
-		return a
+func NewRandomLongPolynomial() *LongPolynomial {
+	var coefficients [1024]int64
+
+	for i := 0; i < len(coefficients); i++ {
+		coefficients[i] = EnsureLongMod(RandomInt64(NewRandomGenerator()))
 	}
+
+	return &LongPolynomial { Coefficients: coefficients }
+}
+
+
+// produces 0 if given 0 (NumMod + 1)
+// produces 2^32 - 1 (NumMod) if given 1
+func BitmaskFromBit(b uint32) uint32 {
+	return NumMod + ((b & 1) ^ 1)
+}
+
+func EnsureMod(a uint32) uint32 {
+	var mask uint32 = 0xFFFFFFFF
+
+	b := uint32(1 ^ BitwiseEq(int64(a), int64(mask)))
+
+	return a & BitmaskFromBit(b ^ 1)
 }
 
 func EnsureLongMod(a int64) int64 {
@@ -72,7 +105,15 @@ func EnsureLongMod(a int64) int64 {
 	return x1 - (((1<<33) - 2) & flag)
 }
 
-// x ^ ((x ^ y) | (x - y) ^ x)
+func AdjustPositiveNegative(n int64) int64 {
+	// we want to leave the number as is if it's in the range [0, LongMod/2 - 1],
+	// otherwise we want to shift back by LongMod (for example moving LongMod-1 to
+	// -1) as it actually corresponds to -1 (goes back to 0 on adding 1)
+	return n - (LongMod * (1 - BitwiseLt(n, (LongMod>>1))))
+}
+
+// 1 if a < b, otherwise 0
+// a ^ ((a ^ b) | (a - b) ^ a)
 // taken from the original repo:
 // 	https://github.com/dstebila/rlwekex/blob/master/rlwe.c
 func BitwiseLt(a, b int64) int64 {
@@ -84,8 +125,8 @@ func BitwiseEq(a, b int64) int64 {
 	return ((a - b) | (b - a)) >> 63;
 }
 
-func BitwiseLtOrEqual(a, b int64) int64 {
-	return 1 ^ BitwiseLt(b, a)
+func BitwiseGtOrEqual(a, b int64) int64 {
+	return BitwiseLt(b, a)
 }
 
 func ModAdd(a, b uint32) uint32 {
@@ -100,6 +141,16 @@ func ModAdd(a, b uint32) uint32 {
 	}
 
 	return EnsureMod(c)
+}
+
+func LongModAdd(a, b int64) int64 {
+	a = EnsureLongMod(a)
+	b = EnsureLongMod(b)
+
+	c := a + b
+
+	// TODO: remove if condition, side channel
+	return EnsureLongMod(c)
 }
 
 func ModMultiply(a, b uint32) uint32 {
@@ -119,6 +170,15 @@ func ModNeg(a uint32) uint32 {
 
 	res := ModAdd(diff, NumMod)
 //	return ModAdd(NumMod - EnsureMod(a), NumMod)
+
+	return res
+}
+
+func LongModNeg(a int64) int64 {
+	amod := EnsureLongMod(a)
+	diff := LongMod - amod
+
+	res := LongModAdd(diff, LongMod)
 
 	return res
 }
@@ -178,35 +238,94 @@ func (p *Polynomial) ErrorDouble(rg RandomGenerator) *LongPolynomial {
 	return res
 }
 
+// the range down to q/4 is inclusive, so we set the value to floor(-q/4), we
+// already know that q/4 is not an integer.
+var ModularRoundLowerBound int64 = -(int64(1)<<31)
+
+// the range up to q/4 is exclusive, so we set the value to floor(q/4), we
+// already know that q/4 is not an integer.
+var ModularRoundUpperBound int64 = (int64(1)<<31) - 1
+
+func ModularRound(n int64) uint32 {
+	nadj := AdjustPositiveNegative(n)
+	res := (1 ^ BitwiseGtOrEqual(nadj, ModularRoundLowerBound) & BitwiseLt(nadj, ModularRoundUpperBound))
+
+	return uint32(res & 1)
+}
+
 func (lp *LongPolynomial) ModularRound() *Polynomial {
 	var coefficients [1024]uint32
 
 	for i := 0; i < 1024; i++ {
-		res := BitwiseLt(lp.Coefficients[i], (LongMod>>1))
-
-		coefficients[i] = 1 - uint32(res)
+		coefficients[i] = ModularRound(lp.Coefficients[i])
 	}
 
 	return &Polynomial{ Coefficients: coefficients }
+}
+
+func CrossRound(n int64) uint32 {
+	a := BitwiseLt(n, CrossRoundQ4)
+	b := BitwiseLt(n, CrossRoundQ2)
+	c := BitwiseLt(n, CrossRoundQ4 + CrossRoundQ2)
+	return 1 - uint32(a ^ b ^ c)
 }
 
 func (lp *LongPolynomial) CrossRound() *Polynomial {
 	var coefficients [1024]uint32
 
 	for i := 0; i < 1024; i++ {
-		a := BitwiseLt(lp.Coefficients[i], CrossRoundQ4)
-		b := BitwiseLt(lp.Coefficients[i], CrossRoundQ2)
-		c := BitwiseLt(lp.Coefficients[i], CrossRoundQ4 + CrossRoundQ2)
-
-		coefficients[i] = 1 - uint32(a ^ b ^ c)
+		coefficients[i] = CrossRound(lp.Coefficients[i])
 	}
 
 	return &Polynomial { Coefficients: coefficients }
 }
 
-func (p *Polynomial) Reconciliate(b uint32) *Polynomial {
+// here by q we mean (2^32 - 1)
+// -q/4 = -(2^32 - 1)/4 = -2^30 + 0.25, so we round up to get the first element
+// inside the set
+var IZeroELowerBoundInclusive int64 = LongModNeg(1<<30)
+
+// round(q/2) + q/4 -1 = round(2 ^ 31 - 0.5) + (2 ^ 30 - 0.25) - 1 =
+// 2^31 + 2^30 - 1.25, so we round up
+// to get the first element outside the set = 2^31 + 2^30 - 1
+var IZeroEUpperBoundExclusive int64 = (1<<31) + (1<<30) - 1
+
+// -q/4 - floor(q/2) = -2^30 + 0.25 - floor(2^31 - 0.5) =
+// -2^30 - 2^31 + 1 + 0.25, so we round up getting
+// -2^30 - 2^31 + 1
+var IOneELowerBoundInclusive int64 = LongModAdd(
+	LongModAdd(LongModNeg(int64(1)<<31), LongModNeg(int64(1)<<30)),
+	int64(1),
+)
+
+// q/4 - 1 = 2^30 - 0.25 - 1 = 2^30 - 1.25, so we round up getting 2^30 - 1
+var IOneEUpperBoundExclusive int64 = (1<<30) - 1
+
+func Reconciliate(w int64, b uint32) uint32 {
 	// hard-code the bounds of I0+E and I1+E
 	// mask according to bit to get Ib+E
 	// not(lower_bound <= w < upper_bound)
-	return p
+
+	// strongly assuming that b is a bit here, to obtain the masks using 0 and -1
+
+	IBLowerBound := ((-1 + int64(b)) & IZeroELowerBoundInclusive) | ((-int64(b)) & IOneELowerBoundInclusive)
+	IBUpperBound := ((-1 + int64(b)) & IZeroEUpperBoundExclusive) | ((-int64(b)) & IOneEUpperBoundExclusive)
+
+	inRange := BitwiseGtOrEqual(AdjustPositiveNegative(w), AdjustPositiveNegative(IBLowerBound)) &
+		BitwiseLt(AdjustPositiveNegative(w), AdjustPositiveNegative(IBUpperBound))
+
+	res := (1 ^ inRange) & 1
+
+	return uint32(res)
+//	return uint32((BitwiseGtOrEqual(IBLowerBound, w) & BitwiseLt(w, IBUpperBound)))
+}
+
+func (w *LongPolynomial) Reconciliate(b *Polynomial) *Polynomial {
+	res := NewPolynomial()
+
+	for i := 0; i < len(w.Coefficients); i++ {
+		res.Coefficients[i] = Reconciliate(w.Coefficients[i], b.Coefficients[i])
+	}
+
+	return res
 }
