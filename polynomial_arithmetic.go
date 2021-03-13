@@ -20,6 +20,23 @@ type Polynomial struct {
 	Coefficients [1024]uint32
 }
 
+func RandomUInt32(rg RandomGenerator) uint32 {
+	var ans uint32
+
+	b := make([]byte, 4)
+	_, err := rg.Read(b)
+
+	if err != nil {
+		panic(err)
+	}
+
+	for j := 0; j < 4; j++ {
+		ans |= uint32(b[j])<<(j<<3)
+	}
+
+	return ans
+}
+
 func RandomInt64(rg RandomGenerator) int64 {
 	var ans int64
 
@@ -37,26 +54,53 @@ func RandomInt64(rg RandomGenerator) int64 {
 	return ans
 }
 
-func NewPolynomial() *Polynomial {
-	return &Polynomial { }
+func NewPolynomial() Polynomial {
+	return Polynomial { }
+}
+
+func NewSmallPolynomial() Polynomial {
+	var coefficients [1024]uint32
+
+	for i := 0; i < len(coefficients); i++ {
+		coefficients[i] = EnsureMod(uint32(GaussianOverZ()))
+	}
+
+	return Polynomial { Coefficients: coefficients }
+}
+
+
+func NewRandomPolynomial() Polynomial {
+	var coefficients [1024]uint32
+
+	for i := 0; i < len(coefficients); i++ {
+		coefficients[i] = EnsureMod(RandomUInt32(NewRandomGenerator()))
+	}
+
+	return Polynomial { Coefficients: coefficients }
 }
 
 type LongPolynomial struct {
 	Coefficients [1024]int64
 }
 
-func NewLongPolynomial() *LongPolynomial {
-	return &LongPolynomial { }
-}
-
-func NewRandomLongPolynomial() *LongPolynomial {
+func NewRandomLongPolynomial() LongPolynomial {
 	var coefficients [1024]int64
 
 	for i := 0; i < len(coefficients); i++ {
 		coefficients[i] = EnsureLongMod(RandomInt64(NewRandomGenerator()))
 	}
 
-	return &LongPolynomial { Coefficients: coefficients }
+	return LongPolynomial { Coefficients: coefficients }
+}
+
+func NewLongPolynomialFromPolynomial(p Polynomial) LongPolynomial {
+	var coefficients [1024]int64
+
+	for i := 0; i < len(coefficients); i++ {
+		coefficients[i] = int64(p.Coefficients[i])
+	}
+
+	return LongPolynomial { Coefficients: coefficients }
 }
 
 
@@ -153,6 +197,10 @@ func LongModAdd(a, b int64) int64 {
 	return EnsureLongMod(c)
 }
 
+func LongModSubtract(a, b int64) int64 {
+	return LongModAdd(a, LongModNeg(b))
+}
+
 func ModMultiply(a, b uint32) uint32 {
 	var c uint64
 
@@ -162,6 +210,15 @@ func ModMultiply(a, b uint32) uint32 {
 	c = uint64(a) * uint64(b)
 
 	return ModAdd(uint32(c), uint32(c>>32))
+}
+
+func LongModMultiply(a, b int64) int64 {
+	a = EnsureLongMod(a)
+	b = EnsureLongMod(b)
+
+	c := a * b
+
+	return EnsureLongMod(c)
 }
 
 func ModNeg(a uint32) uint32 {
@@ -187,16 +244,18 @@ func ModSub(a, b uint32) uint32 {
 	return ModAdd(EnsureMod(a), ModNeg(b))
 }
 
-func (p *Polynomial) Add(other *Polynomial) *Polynomial {
+func (p Polynomial) Add(other Polynomial) Polynomial {
+	res := Polynomial{}
+
 	for i := 0; i < 1024; i++ {
-		p.Coefficients[i] = ModAdd(p.Coefficients[i], other.Coefficients[i])
+		res.Coefficients[i] = ModAdd(p.Coefficients[i], other.Coefficients[i])
 	}
 
-	return p
+	return res
 }
 
 // TODO: Make more efficient: FFT and shit
-func (p *Polynomial) Multiply(other *Polynomial) *Polynomial {
+func (p Polynomial) Multiply(other Polynomial) Polynomial {
 	var res uint32
 
 	pcop := Polynomial {}
@@ -207,32 +266,67 @@ func (p *Polynomial) Multiply(other *Polynomial) *Polynomial {
 
 
 			// TODO: remove if condition, side channel potential
-			if i + j > 1024 {
+			if i + j >= 1024 {
 				res = ModNeg(res)
+			}
+
+			// mod 1024
+			idx := (i + j) & ((1<<10) - 1)
+
+			pcop.Coefficients[idx] = ModAdd(pcop.Coefficients[idx], res)
+
+		}
+	}
+
+	return pcop
+}
+
+// Quite an assumption here: `other` is a small polynomial (generated from the
+// GaussianOverZ function with very low probability to have absolute value
+// greater than 51
+func (p LongPolynomial) Multiply(other LongPolynomial) LongPolynomial {
+	var res int64
+
+	pcop := LongPolynomial{}
+
+	for i := 0; i < 1024; i++ {
+		for j := 0; j < 1024; j++ {
+			res = LongModMultiply(p.Coefficients[i], other.Coefficients[j])
+
+
+			// TODO: remove if condition, side channel potential
+			if i + j >= 1024 {
+				res = LongModNeg(res)
 			}
 
 			// mod 1024
 			idx := (i + j) & (1<<10 - 1)
 
-			pcop.Coefficients[idx] += res
+			pcop.Coefficients[idx] = LongModAdd(pcop.Coefficients[idx], res)
 
 		}
 	}
 
-	for i := 0; i < 1024; i++ {
-		p.Coefficients[i] = pcop.Coefficients[i]
-	}
-
-	return p
+	return pcop
 }
 
-func (p *Polynomial) ErrorDouble(rg RandomGenerator) *LongPolynomial {
-	res := NewLongPolynomial()
+func (p Polynomial) Double() LongPolynomial {
+	res := LongPolynomial{}
+
+	for i := 0; i < len(p.Coefficients); i++ {
+		res.Coefficients[i] = EnsureLongMod(int64(p.Coefficients[i])<<1)
+	}
+
+	return res
+}
+
+func (p Polynomial) ErrorDouble(rg RandomGenerator) LongPolynomial {
+	res := LongPolynomial{}
 
 	doubleError := RandomBit() + (-1 * RandomBit())
 
 	for i := 0; i < len(p.Coefficients); i++ {
-		res.Coefficients[i] = EnsureLongMod(int64(p.Coefficients[i]<<1) + int64(doubleError))
+		res.Coefficients[i] = EnsureLongMod((int64(p.Coefficients[i])<<1) + int64(doubleError))
 	}
 
 	return res
@@ -253,14 +347,14 @@ func ModularRound(n int64) uint32 {
 	return uint32(res & 1)
 }
 
-func (lp *LongPolynomial) ModularRound() *Polynomial {
+func (lp LongPolynomial) ModularRound() Polynomial {
 	var coefficients [1024]uint32
 
 	for i := 0; i < 1024; i++ {
 		coefficients[i] = ModularRound(lp.Coefficients[i])
 	}
 
-	return &Polynomial{ Coefficients: coefficients }
+	return Polynomial{ Coefficients: coefficients }
 }
 
 func CrossRound(n int64) uint32 {
@@ -270,14 +364,14 @@ func CrossRound(n int64) uint32 {
 	return 1 - uint32(a ^ b ^ c)
 }
 
-func (lp *LongPolynomial) CrossRound() *Polynomial {
+func (lp LongPolynomial) CrossRound() Polynomial {
 	var coefficients [1024]uint32
 
 	for i := 0; i < 1024; i++ {
 		coefficients[i] = CrossRound(lp.Coefficients[i])
 	}
 
-	return &Polynomial { Coefficients: coefficients }
+	return Polynomial { Coefficients: coefficients }
 }
 
 // here by q we mean (2^32 - 1)
@@ -320,8 +414,8 @@ func Reconciliate(w int64, b uint32) uint32 {
 //	return uint32((BitwiseGtOrEqual(IBLowerBound, w) & BitwiseLt(w, IBUpperBound)))
 }
 
-func (w *LongPolynomial) Reconciliate(b *Polynomial) *Polynomial {
-	res := NewPolynomial()
+func (w LongPolynomial) Reconciliate(b Polynomial) Polynomial {
+	res := Polynomial{}
 
 	for i := 0; i < len(w.Coefficients); i++ {
 		res.Coefficients[i] = Reconciliate(w.Coefficients[i], b.Coefficients[i])
