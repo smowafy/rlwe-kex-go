@@ -1,50 +1,11 @@
-package main
+package polynomial
 
 import (
-	"testing"
 	"math"
 	"math/rand"
+	"reflect"
+	"testing"
 )
-
-func TestEnsureMod(t *testing.T) {
-	var i, count uint32
-
-	for i = 0; i < 10000000; i++ {
-		expectedRes := uint32(int64(i) % (int64(1)<<33 - 2))
-		res := EnsureMod(i)
-		if res != expectedRes {
-			t.Errorf("mod failed, expected %v but got %v\n", expectedRes, res)
-		}
-
-		count++
-	}
-
-	for i = 0; i < 10000000; i++ {
-		expectedRes := uint32(int64(-i) % (int64(1)<<33 - 2))
-		res := EnsureMod(-i)
-		if res != EnsureMod(expectedRes) {
-			t.Errorf("mod failed, expected %v but got %v\n", expectedRes, res)
-		}
-
-		count++
-	}
-
-	if EnsureMod(NumMod) != 0 {
-		t.Errorf("mod failed, expected %v but got %v\n", 1, EnsureMod(NumMod))
-	}
-
-	for i = 0; i < (1<<31); i+=(rand.Uint32() % (1<<30)) {
-		expectedRes := uint32(int64(i) % (int64(1)<<33 - 2))
-		res := EnsureMod(i)
-		if res != expectedRes {
-			t.Errorf("mod failed, expected %v but got %v\n", expectedRes, res)
-		}
-
-		count++
-	}
-
-	t.Logf("test cases count: %v\n", count)
-}
 
 func TestEnsureLongMod(t *testing.T) {
 	var i, count int64
@@ -59,7 +20,7 @@ func TestEnsureLongMod(t *testing.T) {
 		count++
 	}
 
-	for i = 0; i < (1<<60); i+=rand.Int63n(1<<40)+(1<<30) {
+	for i = 0; i < (1 << 60); i += rand.Int63n(1<<40) + (1 << 30) {
 		expectedRes := i % (int64(1)<<33 - 2)
 		res := EnsureLongMod(i)
 		if res != expectedRes {
@@ -78,7 +39,7 @@ func TestAdjustPositiveNegative(t *testing.T) {
 	var c int64
 
 	for i := 0; i < cases; i++ {
-		c = rand.Int63n(LongMod>>2)
+		c = rand.Int63n(LongMod >> 2)
 
 		if AdjustPositiveNegative(LongModNeg(c)) != -c {
 			t.Errorf("adjusting failed, expected %v but got %v\n", -c, AdjustPositiveNegative(LongModNeg(c)))
@@ -113,7 +74,7 @@ func TestLongModAdd(t *testing.T) {
 	const cases int = 1000
 
 	for c := 0; c < cases; c++ {
-		a, b = rand.Int63n((1<<62)), rand.Int63n((1<<62))
+		a, b = rand.Int63n((1 << 62)), rand.Int63n((1 << 62))
 
 		expectedRes = (a + b) % LongMod
 
@@ -153,9 +114,9 @@ func TestLongModMultiply(t *testing.T) {
 	for c := 0; c < cases; c++ {
 		// testing with one of the numbers slightly smaller not to overflow in
 		// multiplication
-		a, b = EnsureLongMod(rand.Int63()), (rand.Int63()&0xFFFFFFF)
+		a, b = EnsureLongMod(rand.Int63()), (rand.Int63() & 0xFFFFFFF)
 
-		expectedRes = (((a * b) % LongMod)+LongMod)%LongMod
+		expectedRes = (((a * b) % LongMod) + LongMod) % LongMod
 
 		res = LongModMultiply(a, b)
 
@@ -181,8 +142,8 @@ func TestModNeg(t *testing.T) {
 }
 
 func TestLongModNeg(t *testing.T) {
-	for a := (int64(1)<<32); a <= (int64(1)<<34); a+=(rand.Int63n(int64(1)<<20)) {
-		expected := (-a + 8 * LongMod) % LongMod
+	for a := (int64(1) << 32); a <= (int64(1) << 34); a += (rand.Int63n(int64(1) << 20)) {
+		expected := (-a + 8*LongMod) % LongMod
 		actual := LongModNeg(a)
 
 		if expected != actual {
@@ -193,13 +154,147 @@ func TestLongModNeg(t *testing.T) {
 	}
 }
 
-func TestPolyAdd(t *testing.T) {
+func TestNussbaumer(t *testing.T) {
+	/*
+		cases := 1
+
+		for ; cases > 0; cases-- {
+			acoef := make([]uint32, 1024)
+
+			for i := range acoef {
+				acoef[i] = uint32(RandomBit()) * EnsureMod(RandomUInt32(NewRandomGenerator()))
+			}
+
+	//		acoef := NussbaumerPolynomial([]uint32 { 1, 3, 2, 5, 0, 0, 0, 0 })
+
+	coefsArray := NewRandomPolynomial().Coefficients
+	coefs := coefsArray[:]
+
+	acoef := NussbaumerPolynomial(coefs)
+	*/
+
+	coefs := []uint32 { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }
+
+	t.Logf("coefs = %v\n", coefs)
+
+	acoef := NussbaumerPolynomial(coefs)
+
+	t.Logf("acoef = %v\n", acoef)
+
+	fft := NussbaumerTransform(acoef)
+
+	t.Logf("fft = %v\n", fft)
+
+	inv := NussbaumerInverseTransform(fft)
+
+	t.Logf("inv = %v\n", inv)
+
+	for i, v := range inv {
+		if !reflect.DeepEqual(acoef[i], v) {
+			t.Errorf("Different coefficients, expected %v but got %v\n", acoef[i], v[i])
+		}
+	}
+
+	/*
+		if !reflect.DeepEqual(acoef, inv) {
+			t.Errorf("fft failed\nexpected %v\ngot %v\n", acoef, inv)
+		}
+	*/
+	//	}
+}
+
+func TestNussbaumerIterative(t *testing.T) {
+//	coefsArray := NewRandomPolynomial().Coefficients
+//	coefs := coefsArray[:]
+
+	coefs := [][]uint32 {
+		[]uint32 { 0, 4, 8, 12 },
+		[]uint32 { 1, 5, 9, 13 },
+		[]uint32 { 2, 6, 10, 14 },
+		[]uint32 { 3, 7, 11, 15 },
+	}
+
+
+//	coefs := []uint32 { 1, 3, 2, 5, 0, 0, 0, 0 }
+
+	acoef := coefs
+	// acoef2 := NussbaumerIterativeReorderPolynomial(coefs)
+	acoef2 := make([][]uint32, len(acoef))
+
+	for i, v := range acoef {
+		acoef2[i] = make([]uint32, len(acoef[i]))
+		copy(acoef2[i], v)
+	}
+
+	acoef2 = NussbaumerIterativeReorderPolynomial(acoef2)
+
+
+	fft := NussbaumerTransform(acoef)
+	fftIter := NussbaumerIterativeTransform(acoef2)
+
+	if !reflect.DeepEqual(fft, fftIter) {
+		t.Errorf("Different fft coefficients, expected %v but got %v\n", fft, fftIter)
+		return
+	}
+
+	inv := NussbaumerInverseTransform(fft)
+
+	fftIter = NussbaumerIterativeReorderPolynomial(fftIter)
+
+	t.Logf("fftIter = %v\n", fftIter)
+
+	invIter := NussbaumerIterativeInverseTransform(fftIter)
+
+	if !reflect.DeepEqual(inv, invIter) {
+		t.Errorf("Different coefficients, expected %v but got %v\n", inv, invIter)
+	}
+}
+
+func BenchmarkNussbaumerIterative(b *testing.B) {
+	coefficients := make([]uint32, 1024)
+
+	for i := 0; i < len(coefficients); i++ {
+		coefficients[i] = EnsureMod(RandomUInt32(NewRandomGenerator()))
+	}
+
+	acoef := NussbaumerPolynomial(coefficients)
+
+	acoef = NussbaumerIterativeReorderPolynomial(acoef)
+
+	b.ResetTimer()
+
+	NussbaumerIterativeTransform(acoef)
+}
+
+
+func BenchmarkNussbaumerIterativeInverse(b *testing.B) {
+	coefficients := make([]uint32, 1024)
+
+	for i := 0; i < len(coefficients); i++ {
+		coefficients[i] = EnsureMod(RandomUInt32(NewRandomGenerator()))
+	}
+
+	acoef := NussbaumerPolynomial(coefficients)
+	acoef = NussbaumerIterativeReorderPolynomial(acoef)
+
+	b.ResetTimer()
+
+	NussbaumerIterativeInverseTransform(acoef)
+}
+
+func BenchmarkPolyMultiply(b *testing.B) {
+	a0 := NewRandomPolynomial()
+	a1 := NewRandomPolynomial()
+
+	b.ResetTimer()
+
+	a0.Multiply(a1)
 }
 
 func TestPolyMultiply(t *testing.T) {
 
-	p1 := Polynomial {
-		Coefficients: [1024]uint32 {
+	p1 := Polynomial{
+		Coefficients: [1024]uint32{
 			2290161843, 1502266578, 3044885867, 15425721, 2839089316, 4114567907, 3997559913, 1549701630, 140075611,
 			554776049, 296509263, 170350885, 387815849, 3073155765, 600322586, 703594638, 3019197442, 75295900,
 			4024088301, 3715479412, 129851843, 2168053456, 2638727338, 2931355281, 494158999, 1843198336, 3524912000,
@@ -317,9 +412,8 @@ func TestPolyMultiply(t *testing.T) {
 		},
 	}
 
-
-	expectedRes := Polynomial {
-		Coefficients: [1024]uint32 {
+	expectedRes := Polynomial{
+		Coefficients: [1024]uint32{
 			3278793406, 1369117525, 3756610447, 2032978779, 1910294592, 3158199183, 1235607807, 2851810365, 2314300604,
 			1603150750, 2426687539, 4012261761, 1054719540, 148304551, 44678601, 3504693822, 1962556653, 3236741047,
 			2595944829, 3848453337, 606022416, 234278635, 2235438915, 3384741259, 2328374883, 794055706, 4088524202,
@@ -437,9 +531,56 @@ func TestPolyMultiply(t *testing.T) {
 		},
 	}
 
-	if p1.Multiply(p1).Coefficients[0] != expectedRes.Coefficients[0] {
-		t.Errorf("polynomial multiplication failed\n\nexpected %v\n\ngot %v\n", expectedRes, p1)
+	res := p1.Multiply(p1)
+	//	newRes := p1.NewMultiply(p1)
+
+	for i := range res.Coefficients {
+		if res.Coefficients[i] != expectedRes.Coefficients[i] {
+			t.Errorf("polynomial multiplication failed\n\nexpected %v\n\ngot %v\n", expectedRes, res)
+			return
+		}
 	}
+}
+
+func TestBitReverse(t *testing.T) {
+	inp := 256
+
+	expected := 1
+
+	ans := BitReverse(inp, MostSignificantBitIndex(inp))
+	if ans != expected {
+		t.Errorf("reversal failed, expected %v, got %v\n", expected, ans)
+	}
+}
+
+func TestNussbaumerIterativePolynomial(t *testing.T) {
+	inp := []uint32 { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }
+
+	expected := [][]uint32 {
+		[]uint32 { 0, 0, 0, 0, 0, 0, 0, 0 },
+		[]uint32 { 8, 0, 0, 0, 0, 0, 0, 0 },
+		[]uint32 { 4, 0, 0, 0, 0, 0, 0, 0 },
+		[]uint32 { 12, 0, 0, 0, 0, 0, 0, 0 },
+		[]uint32 { 2, 0, 0, 0, 0, 0, 0, 0 },
+		[]uint32 { 10, 0, 0, 0, 0, 0, 0, 0 },
+		[]uint32 { 6, 0, 0, 0, 0, 0, 0, 0 },
+		[]uint32 { 14, 0, 0, 0, 0, 0, 0, 0 },
+		[]uint32 { 1, 0, 0, 0, 0, 0, 0, 0 },
+		[]uint32 { 9, 0, 0, 0, 0, 0, 0, 0 },
+		[]uint32 { 5, 0, 0, 0, 0, 0, 0, 0 },
+		[]uint32 { 13, 0, 0, 0, 0, 0, 0, 0 },
+		[]uint32 { 3, 0, 0, 0, 0, 0, 0, 0 },
+		[]uint32 { 11, 0, 0, 0, 0, 0, 0, 0 },
+		[]uint32 { 7, 0, 0, 0, 0, 0, 0, 0 },
+		[]uint32 { 15, 0, 0, 0, 0, 0, 0, 0 },
+	}
+
+	ans := NussbaumerIterativePolynomial(inp)
+
+	if !reflect.DeepEqual(ans, expected) {
+		t.Errorf("reversal failed, expected %v, got %v\n", expected, ans)
+	}
+
 }
 
 func TestLongPolyMultiply(t *testing.T) {
@@ -469,11 +610,10 @@ func TestLongPolyMultiply(t *testing.T) {
 	}
 }
 
-
 func TestModularRound(t *testing.T) {
 	longPolynomial := LongPolynomial{}
 
-//	longPolynomial.Coefficients[0] = int64(NumMod)
+	//	longPolynomial.Coefficients[0] = int64(NumMod)
 	longPolynomial.Coefficients[0] = int64(NumMod>>2) - 1
 	longPolynomial.Coefficients[1] = int64(NumMod) - 3
 	longPolynomial.Coefficients[2] = 2
@@ -509,15 +649,15 @@ func TestCrossRound(t *testing.T) {
 	longPolynomial.Coefficients[8] = CrossRoundQ2 + CrossRoundQ4 + 5
 
 	expectedRes := Polynomial{}
-	expectedRes.Coefficients[0] = uint32(math.Floor(4.0 * float64(longPolynomial.Coefficients[0]) / float64(LongMod))) % 2
-	expectedRes.Coefficients[1] = uint32(math.Floor(4.0 * float64(longPolynomial.Coefficients[1]) / float64(LongMod))) % 2
-	expectedRes.Coefficients[2] = uint32(math.Floor(4.0 * float64(longPolynomial.Coefficients[2]) / float64(LongMod))) % 2
-	expectedRes.Coefficients[3] = uint32(math.Floor(4.0 * float64(longPolynomial.Coefficients[3]) / float64(LongMod))) % 2
-	expectedRes.Coefficients[4] = uint32(math.Floor(4.0 * float64(longPolynomial.Coefficients[4]) / float64(LongMod))) % 2
-	expectedRes.Coefficients[5] = uint32(math.Floor(4.0 * float64(longPolynomial.Coefficients[5]) / float64(LongMod))) % 2
-	expectedRes.Coefficients[6] = uint32(math.Floor(4.0 * float64(longPolynomial.Coefficients[6]) / float64(LongMod))) % 2
-	expectedRes.Coefficients[7] = uint32(math.Floor(4.0 * float64(longPolynomial.Coefficients[7]) / float64(LongMod))) % 2
-	expectedRes.Coefficients[8] = uint32(math.Floor(4.0 * float64(longPolynomial.Coefficients[8]) / float64(LongMod))) % 2
+	expectedRes.Coefficients[0] = uint32(math.Floor(4.0*float64(longPolynomial.Coefficients[0])/float64(LongMod))) % 2
+	expectedRes.Coefficients[1] = uint32(math.Floor(4.0*float64(longPolynomial.Coefficients[1])/float64(LongMod))) % 2
+	expectedRes.Coefficients[2] = uint32(math.Floor(4.0*float64(longPolynomial.Coefficients[2])/float64(LongMod))) % 2
+	expectedRes.Coefficients[3] = uint32(math.Floor(4.0*float64(longPolynomial.Coefficients[3])/float64(LongMod))) % 2
+	expectedRes.Coefficients[4] = uint32(math.Floor(4.0*float64(longPolynomial.Coefficients[4])/float64(LongMod))) % 2
+	expectedRes.Coefficients[5] = uint32(math.Floor(4.0*float64(longPolynomial.Coefficients[5])/float64(LongMod))) % 2
+	expectedRes.Coefficients[6] = uint32(math.Floor(4.0*float64(longPolynomial.Coefficients[6])/float64(LongMod))) % 2
+	expectedRes.Coefficients[7] = uint32(math.Floor(4.0*float64(longPolynomial.Coefficients[7])/float64(LongMod))) % 2
+	expectedRes.Coefficients[8] = uint32(math.Floor(4.0*float64(longPolynomial.Coefficients[8])/float64(LongMod))) % 2
 
 	res := longPolynomial.CrossRound()
 
@@ -529,9 +669,9 @@ func TestCrossRound(t *testing.T) {
 // Note: not 100% uniform over the error, used only for testing
 func SufficientlyCloseLongMod(n int64) int64 {
 	randomBit := int64(RandomBit())
-	randomAbsError := EnsureLongMod(RandomInt64(NewRandomGenerator()))>>4
+	randomAbsError := EnsureLongMod(RandomInt64(NewRandomGenerator())) >> 4
 
-	randomError := (randomAbsError & -1 + randomBit) | (LongModNeg(randomAbsError) & -randomBit)
+	randomError := (randomAbsError&-1 + randomBit) | (LongModNeg(randomAbsError) & -randomBit)
 
 	return LongModAdd(n, randomError)
 }
@@ -543,7 +683,7 @@ func SufficientlyCloseLongPolynomial(lp LongPolynomial) LongPolynomial {
 		coefficients[i] = SufficientlyCloseLongMod(lp.Coefficients[i])
 	}
 
-	return LongPolynomial { Coefficients: coefficients }
+	return LongPolynomial{Coefficients: coefficients}
 }
 
 func TestReconciliate(t *testing.T) {
@@ -581,8 +721,8 @@ func TestReconciliate(t *testing.T) {
 
 }
 
-func fTestPolynomialReconciliate(t *testing.T) {
-	cases := 2000
+func TestPolynomialReconciliate(t *testing.T) {
+	cases := 1000
 
 	for c := 0; c < cases; c++ {
 		v := NewRandomLongPolynomial()

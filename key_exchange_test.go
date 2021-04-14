@@ -1,6 +1,8 @@
 package main
 
-import(
+import (
+	"github.com/smowafy/rlwe-kex-go/polynomial"
+	"reflect"
 	"testing"
 )
 
@@ -8,13 +10,12 @@ func TestServerClientKeyExchange(t *testing.T) {
 	cases := 100
 
 	for i := 0; i < cases; i++ {
-		a := NewRandomPolynomial()
+		a := polynomial.NewRandomPolynomial()
 
 		s, b := ServerKeyExchange(a)
 		_, vdbl, bprime, c := ClientKeyExchange(a, b)
 
 		clientCompute := vdbl.ModularRound()
-
 
 		//server
 		bPrimeS := bprime.Multiply(s)
@@ -23,18 +24,24 @@ func TestServerClientKeyExchange(t *testing.T) {
 
 		serverCompute := twoBprimeS.Reconciliate(c)
 
-		if serverCompute.Coefficients != clientCompute.Coefficients {
-			diffCount := 0
-
-			for i := range serverCompute.Coefficients {
-				if serverCompute.Coefficients[i] != clientCompute.Coefficients[i] {
-					diffCount++
-				}
-			}
-
-			t.Errorf("diffCount = %v\n", diffCount)
-
-			return
+		if !reflect.DeepEqual(serverCompute, clientCompute) {
+			t.Errorf("key exchange failed\n")
 		}
 	}
+}
+
+func BenchmarkServerClientKeyExchange(t *testing.B) {
+	a := polynomial.NewRandomPolynomial()
+
+	s, b := ServerKeyExchange(a)
+	_, vdbl, bprime, c := ClientKeyExchange(a, b)
+
+	vdbl.ModularRound()
+
+	//server
+	bPrimeS := bprime.Multiply(s)
+
+	twoBprimeS := bPrimeS.Double()
+
+	twoBprimeS.Reconciliate(c)
 }

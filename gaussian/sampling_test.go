@@ -1,6 +1,6 @@
-package main
+package gaussian
 
-import(
+import (
 	"testing"
 )
 
@@ -19,24 +19,24 @@ func equal(a, b [3]uint64) bool {
 }
 
 func TestVecAdd(t *testing.T) {
-	v1 := Vec {
-		Chunks: [3]uint64 {
+	v1 := Vec{
+		Chunks: [3]uint64{
 			0x0000000000000000,
 			0xFFFFFFFFFFFFFFFF,
 			0xFFFFFFFFFFFFFFFE,
 		},
 	}
 
-	v2 := Vec {
-		Chunks: [3]uint64 {
+	v2 := Vec{
+		Chunks: [3]uint64{
 			0x0000000000000000,
 			0x0000000000000000,
 			0x0000000000000002,
 		},
 	}
 
-	v3 := Vec {
-		Chunks: [3]uint64 {
+	v3 := Vec{
+		Chunks: [3]uint64{
 			0x0000000000000001,
 			0x0000000000000000,
 			0x0000000000000000,
@@ -46,31 +46,31 @@ func TestVecAdd(t *testing.T) {
 	v1.Add(v2)
 
 	for i := 0; i < 3; i++ {
-		if(v1.Chunks[i] != v3.Chunks[i]) {
+		if v1.Chunks[i] != v3.Chunks[i] {
 			t.Errorf("Sum not equal, got %v and %v\n", v1, v3)
 		}
 	}
 }
 
 func TestVecSub(t *testing.T) {
-	v1 := Vec {
-		Chunks: [3]uint64 {
+	v1 := Vec{
+		Chunks: [3]uint64{
 			0x0000000000000001,
 			0x0000000000000000,
 			0x0000000000000000,
 		},
 	}
 
-	v2 := Vec {
-		Chunks: [3]uint64 {
+	v2 := Vec{
+		Chunks: [3]uint64{
 			0x0000000000000000,
 			0x0000000000000000,
 			0x0000000000000002,
 		},
 	}
 
-	v3 := Vec {
-		Chunks: [3]uint64 {
+	v3 := Vec{
+		Chunks: [3]uint64{
 			0x0000000000000000,
 			0xFFFFFFFFFFFFFFFF,
 			0xFFFFFFFFFFFFFFFE,
@@ -80,15 +80,15 @@ func TestVecSub(t *testing.T) {
 	v1.Sub(v2)
 
 	for i := 0; i < 3; i++ {
-		if(v1.Chunks[i] != v3.Chunks[i]) {
+		if v1.Chunks[i] != v3.Chunks[i] {
 			t.Errorf("Diff not equal, got %v and %v\n", v1, v3)
 		}
 	}
 }
 
 func TestVecCopy(t *testing.T) {
-	v1 := Vec {
-		Chunks: [3]uint64 {
+	v1 := Vec{
+		Chunks: [3]uint64{
 			0x0000000000000001,
 			0x0000000000000000,
 			0x0000000000000000,
@@ -105,22 +105,21 @@ func TestVecCopy(t *testing.T) {
 }
 
 func TestBitwiseLtVec(t *testing.T) {
-	v1 := Vec {
-		Chunks: [3]uint64 {
+	v1 := Vec{
+		Chunks: [3]uint64{
 			0x0000000000000000,
 			0x000000000000FFFF,
 			0x0000000000000000,
 		},
 	}
 
-	v2 := Vec {
-		Chunks: [3]uint64 {
+	v2 := Vec{
+		Chunks: [3]uint64{
 			0x0000000000000001,
 			0x0000000000000000,
 			0x0000000000000000,
 		},
 	}
-
 
 	if v1.BitwiseLtVec(v2) != 1 {
 		t.Errorf("answer  = %v\n", v1.BitwiseLtVec(v2))
@@ -130,21 +129,21 @@ func TestBitwiseLtVec(t *testing.T) {
 // https://medium.com/@ankur_anand/how-to-mock-in-your-go-golang-tests-b9eee7d7c266
 var fakeRead func(b []byte) (int, error)
 
-type fakeRandomGenerator struct { }
+type fakeRandomGenerator struct{}
 
 func (rg fakeRandomGenerator) Read(b []byte) (int, error) {
 	return fakeRead(b)
 }
 
 func TestNewRandomVec(t *testing.T) {
-	var expectedChunks = [3]uint64 {
+	var expectedChunks = [3]uint64{
 		0xFE151BD0928596D3, 0x148CB49FF716491B, 0xC3D9E58131089A6A,
 	}
 
-	fakeRead = func (b []byte) (int, error) {
+	fakeRead = func(b []byte) (int, error) {
 		for i := 0; i < 3; i++ {
 			for j := 0; j < 8; j++ {
-				b[(i<<3) + j] = byte((expectedChunks[i]>>(j<<3)) & 0xFF)
+				b[(i<<3)+j] = byte((expectedChunks[i] >> (j << 3)) & 0xFF)
 			}
 		}
 
