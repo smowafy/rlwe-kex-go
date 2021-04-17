@@ -1,6 +1,7 @@
 package polynomial
 
 import (
+	"github.com/smowafy/rlwe-kex-go/utils"
 	"github.com/smowafy/rlwe-kex-go/gaussian"
 )
 
@@ -31,7 +32,7 @@ func NewRandomPolynomial() Polynomial {
 	p := make(Polynomial, 1024)
 
 	for i := range p {
-		p[i] = EnsureMod(RandomUInt32(gaussian.NewRandomGenerator()))
+		p[i] = EnsureMod(utils.RandomUInt32(utils.NewRandomGenerator()))
 	}
 
 	return p
@@ -43,7 +44,7 @@ func NewRandomLongPolynomial() LongPolynomial {
 	p := make(LongPolynomial, 1024)
 
 	for i := range p {
-		p[i] = EnsureLongMod(RandomInt64(gaussian.NewRandomGenerator()))
+		p[i] = EnsureLongMod(utils.RandomInt64(utils.NewRandomGenerator()))
 	}
 
 	return p
@@ -86,10 +87,10 @@ func (p Polynomial) Double() LongPolynomial {
 	return res
 }
 
-func (p Polynomial) ErrorDouble(rg gaussian.RandomGenerator) LongPolynomial {
+func (p Polynomial) ErrorDouble(rg utils.RandomGenerator) LongPolynomial {
 	res := make(LongPolynomial, len(p))
 
-	doubleError := gaussian.RandomBit() + (-1 * gaussian.RandomBit())
+	doubleError := utils.RandomBit() + (-1 * utils.RandomBit())
 
 	for i := range p {
 		res[i] = EnsureLongMod((int64(p[i]) << 1) + int64(doubleError))

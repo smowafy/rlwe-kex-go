@@ -1,23 +1,13 @@
 package gaussian
 
 import (
-	"crypto/rand"
+	"github.com/smowafy/rlwe-kex-go/utils"
 )
 
 type Vec struct {
 	Chunks [3]uint64
 }
 
-// interface mostly for mocks in tests
-type RandomGenerator interface {
-	Read([]byte) (int, error)
-}
-
-type CryptoRandomGen struct{}
-
-func (rg *CryptoRandomGen) Read(b []byte) (int, error) {
-	return rand.Read(b)
-}
 
 // table of the precomputed values of the probability distribution described in
 // the paper (J. W. Bos, C. Costello, M. Naehrig and D. Stebila, "Post-Quantum
@@ -82,39 +72,22 @@ var table = [...]Vec{
 	Vec{Chunks: [3]uint64{0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF}},
 }
 
-func NewRandomGenerator() RandomGenerator {
-	return &CryptoRandomGen{}
-}
-
-func RandomBit() int {
-	v := make([]byte, 1)
-
-	_, err := rand.Read(v)
-
-	if err != nil {
-		panic(err)
-	}
-
-	return int(v[0]) & 1
-}
-
 func (v *Vec) addWithCarry(v1 Vec, carry uint64) *Vec {
 	var sum uint64 = 0
 
 	for i := 2; i >= 0; i-- {
 		sum = v.Chunks[i] + v1.Chunks[i] + carry
 
-		// TODO: remove the if condition, side channel potential
-		if sum < v.Chunks[i] {
-			carry = 1
-		} else {
-			carry = 0
-		}
+		carry = U64BitwiseLt(sum, v.Chunks[i])
 
 		v.Chunks[i] = sum
 	}
 
 	return v
+}
+
+func U64BitwiseLt(a, b uint64) uint64 {
+	return (a ^ ((a ^ b) | ((a - b) ^ a))) >> 63 & 1
 }
 
 func NewVec(chunks [3]uint64) *Vec {
@@ -141,7 +114,7 @@ func NewOneVec() *Vec {
 	}
 }
 
-func NewRandomVec(rg RandomGenerator) *Vec {
+func NewRandomVec(rg utils.RandomGenerator) *Vec {
 	b := make([]byte, 24)
 	_, err := rg.Read(b)
 
@@ -223,11 +196,11 @@ func (v *Vec) Sub(v1 Vec) *Vec {
 }
 
 func GaussianOverZ() int {
-	vec := NewRandomVec(NewRandomGenerator())
+	vec := NewRandomVec(utils.NewRandomGenerator())
 
 	// 1 if the bit is 1
 	// -1 if the bit is 0
-	randSign := (RandomBit() << 1) - 1
+	randSign := (utils.RandomBit() << 1) - 1
 
 	return constantTimeSampling(*vec) * randSign
 }

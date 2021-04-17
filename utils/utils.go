@@ -1,8 +1,35 @@
-package polynomial
+package utils
 
 import(
-	"github.com/smowafy/rlwe-kex-go/gaussian"
+	"crypto/rand"
 )
+
+// interface mostly for mocks in tests
+type RandomGenerator interface {
+	Read([]byte) (int, error)
+}
+
+type CryptoRandomGen struct{}
+
+func (rg *CryptoRandomGen) Read(b []byte) (int, error) {
+	return rand.Read(b)
+}
+
+func NewRandomGenerator() RandomGenerator {
+	return &CryptoRandomGen{}
+}
+
+func RandomBit() int {
+	v := make([]byte, 1)
+
+	_, err := rand.Read(v)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return int(v[0]) & 1
+}
 
 func Log2(ln int) int {
 	log2a := 0
@@ -20,7 +47,7 @@ func Log2(ln int) int {
 	return log2a
 }
 
-func RandomUInt32(rg gaussian.RandomGenerator) uint32 {
+func RandomUInt32(rg RandomGenerator) uint32 {
 	var ans uint32
 
 	b := make([]byte, 4)
@@ -37,7 +64,7 @@ func RandomUInt32(rg gaussian.RandomGenerator) uint32 {
 	return ans
 }
 
-func RandomInt64(rg gaussian.RandomGenerator) int64 {
+func RandomInt64(rg RandomGenerator) int64 {
 	var ans int64
 
 	b := make([]byte, 8)
@@ -52,12 +79,6 @@ func RandomInt64(rg gaussian.RandomGenerator) int64 {
 	}
 
 	return ans
-}
-
-// produces 0 if given 0 (NumMod + 1)
-// produces 2^32 - 1 (NumMod) if given 1
-func BitmaskFromBit(b uint32) uint32 {
-	return NumMod + ((b & 1) ^ 1)
 }
 
 // 1 if a < b, otherwise 0

@@ -3,6 +3,7 @@ package polynomial
 import(
 	"testing"
 	"reflect"
+	"github.com/smowafy/rlwe-kex-go/utils"
 )
 
 
@@ -121,8 +122,8 @@ func BenchmarkNaiveMultiply(b *testing.B) {
 	a1 := make([]uint32, 512)
 
 	for i := 0; i < len(a0); i++ {
-		a0[i] = EnsureMod(RandomUInt32(NewRandomGenerator()))
-		a1[i] = EnsureMod(RandomUInt32(NewRandomGenerator()))
+		a0[i] = EnsureMod(utils.RandomUInt32(utils.NewRandomGenerator()))
+		a1[i] = EnsureMod(utils.RandomUInt32(utils.NewRandomGenerator()))
 	}
 
 	b.ResetTimer()
@@ -135,8 +136,8 @@ func BenchmarkNussbaumerIterativeMultiply(b *testing.B) {
 	a1 := make([]uint32, 512)
 
 	for i := 0; i < len(a0); i++ {
-		a0[i] = EnsureMod(RandomUInt32(NewRandomGenerator()))
-		a1[i] = EnsureMod(RandomUInt32(NewRandomGenerator()))
+		a0[i] = EnsureMod(utils.RandomUInt32(utils.NewRandomGenerator()))
+		a1[i] = EnsureMod(utils.RandomUInt32(utils.NewRandomGenerator()))
 	}
 
 	b.ResetTimer()
@@ -149,8 +150,8 @@ func BenchmarkNussbaumerRecursiveMultiply(b *testing.B) {
 	a1 := make([]uint32, 512)
 
 	for i := 0; i < len(a0); i++ {
-		a0[i] = EnsureMod(RandomUInt32(NewRandomGenerator()))
-		a1[i] = EnsureMod(RandomUInt32(NewRandomGenerator()))
+		a0[i] = EnsureMod(utils.RandomUInt32(utils.NewRandomGenerator()))
+		a1[i] = EnsureMod(utils.RandomUInt32(utils.NewRandomGenerator()))
 	}
 
 	b.ResetTimer()

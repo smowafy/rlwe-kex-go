@@ -1,7 +1,7 @@
 package polynomial
 
 import(
-//	"sync"
+	"github.com/smowafy/rlwe-kex-go/utils"
 )
 
 // correct only for power of 2 lengths
@@ -22,7 +22,7 @@ func lookupShift(a []uint32, shift int, i int, log2a int) uint32 {
 }
 
 func NussbaumerPolynomial(inp []uint32) [][]uint32 {
-	log2len := Log2(len(inp))
+	log2len := utils.Log2(len(inp))
 
 	// closest power of two to the square root??
 	l1 := (1<<(log2len>>1))
@@ -42,7 +42,7 @@ func NussbaumerPolynomial(inp []uint32) [][]uint32 {
 }
 
 func NussbaumerDoublePolynomial(inp []uint32) [][]uint32 {
-	log2len := Log2(len(inp))
+	log2len := utils.Log2(len(inp))
 
 	// closest power of two to the square root??
 	l1 := (1<<(log2len>>1))
@@ -137,7 +137,7 @@ func NussbaumerIterativeTransform(b [][]uint32) [][]uint32 {
 	n := len(b)
 	a := b
 
-	log2a := Log2(n)
+	log2a := utils.Log2(n)
 
 	a0, a1 := make([]uint32, len(a[0])), make([]uint32, len(a[0]))
 
@@ -169,7 +169,7 @@ func NussbaumerIterativeInverseTransform(b [][]uint32) [][]uint32 {
 	n := len(b)
 	a := b
 
-	log2a := Log2(len(a[0]))
+	log2a := utils.Log2(len(a[0]))
 
 	a0, a1 := make([]uint32, len(a[0])), make([]uint32, len(a[0]))
 
@@ -234,9 +234,9 @@ func NussbaumerTransform(ahat [][]uint32) [][]uint32 {
 			// here (even though the iterative version is actually used which does not
 			// even include division).
 			shiftVal := -i * len(a0[i]) / len(a0)
-			ans[i][j] = ModAdd(a0[i][j], lookupShift(a1[i], shiftVal, j, Log2(len(a1[i]))))
+			ans[i][j] = ModAdd(a0[i][j], lookupShift(a1[i], shiftVal, j, utils.Log2(len(a1[i]))))
 
-			ans[i+(len(ans)>>1)][j] = ModAdd(a0[i][j], ModNeg(lookupShift(a1[i], shiftVal, j, Log2(len(a1[i])))))
+			ans[i+(len(ans)>>1)][j] = ModAdd(a0[i][j], ModNeg(lookupShift(a1[i], shiftVal, j, utils.Log2(len(a1[i])))))
 		}
 
 	}
@@ -279,9 +279,9 @@ func NussbaumerInverseTransform(ahat [][]uint32) [][]uint32 {
 			// here (even though the iterative version is actually used which does not
 			// even include division).
 			shiftVal := i * len(a0[i]) / len(a0)
-			ans[i][j] = ModMultiply(ModAdd(a0[i][j], lookupShift(a1[i], shiftVal, j, Log2(len(a1[i])))), TwoInv)
+			ans[i][j] = ModMultiply(ModAdd(a0[i][j], lookupShift(a1[i], shiftVal, j, utils.Log2(len(a1[i])))), TwoInv)
 
-			ans[i+(len(ans)>>1)][j] = ModMultiply(ModAdd(a0[i][j], ModNeg(lookupShift(a1[i], shiftVal, j, Log2(len(a1[i]))))), TwoInv)
+			ans[i+(len(ans)>>1)][j] = ModMultiply(ModAdd(a0[i][j], ModNeg(lookupShift(a1[i], shiftVal, j, utils.Log2(len(a1[i]))))), TwoInv)
 		}
 
 	}

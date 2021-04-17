@@ -2,8 +2,8 @@ package main
 
 import (
 	//	"log"
-	"github.com/smowafy/rlwe-kex-go/gaussian"
 	"github.com/smowafy/rlwe-kex-go/polynomial"
+	"github.com/smowafy/rlwe-kex-go/utils"
 )
 
 func ServerKeyExchange(a polynomial.Polynomial) (polynomial.Polynomial, polynomial.Polynomial) {
@@ -27,7 +27,7 @@ func ClientKeyExchange(a polynomial.Polynomial, b polynomial.Polynomial) (polyno
 
 	v := bSprime.Add(edprime)
 
-	vdbl := v.ErrorDouble(gaussian.NewRandomGenerator())
+	vdbl := v.ErrorDouble(utils.NewRandomGenerator())
 
 	c := vdbl.CrossRound()
 
